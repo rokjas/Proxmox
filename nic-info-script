@@ -1,0 +1,58 @@
+param(
+    [switch]$Detailed
+)
+
+function Get-AddressList {
+    param(
+        [object[]]$Items,
+        [string]$PropertyName
+    )
+
+    if (-not $Items) {
+        return ''
+    }
+
+    $values = foreach ($item in $Items) {
+        if ($null -ne $item.$PropertyName) {
+            $item.$PropertyName
+        }
+    }
+
+    ($values | Where-Object { $_ }) -join ', '
+}
+
+$networkSummary = Get-NetIPConfiguration |
+    Sort-Object InterfaceAlias |
+    ForEach-Object {
+        [pscustomobject]@{
+            Interface = $_.InterfaceAlias
+            Status    = $_.NetAdapter.Status
+            MAC       = $_.NetAdapter.MacAddress
+            IPv4      = Get-AddressList -Items $_.IPv4Address -PropertyName 'IPAddress'
+            IPv6      = Get-AddressList -Items $_.IPv6Address -PropertyName 'IPAddress'
+            Gateway   = Get-AddressList -Items $_.IPv4DefaultGateway -PropertyName 'NextHop'
+            DNS       = ($_.DNSServer.ServerAddresses -join ', ')
+            DHCP      = if ($_.NetIPv4Interface.Dhcp -eq 'Enabled') { 'Taip' } elseif ($_.NetIPv4Interface.Dhcp -eq 'Disabled') { 'Ne' } else { '' }
+        }
+    }
+
+Write-Host "Kompiuteris: $env:COMPUTERNAME"
+Write-Host "Vartotojas:   $env:USERNAME"
+Write-Host ""
+
+if ($Detailed) {
+    $networkSummary | Format-List *
+}
+else {
+    foreach ($adapter in $networkSummary) {
+        Write-Host "Interface: $($adapter.Interface)"
+        Write-Host "Status:    $($adapter.Status)"
+        Write-Host "MAC:     $($adapter.MAC)"
+        Write-Host "IPv4:    $($adapter.IPv4)"
+        Write-Host "IPv6:    $($adapter.IPv6)"
+        Write-Host "Gateway: $($adapter.Gateway)"
+        Write-Host "DNS:     $($adapter.DNS)"
+        Write-Host "DHCP:    $($adapter.DHCP)"
+        Write-Host ""
+    }
+}
